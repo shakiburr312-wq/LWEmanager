@@ -1,9 +1,13 @@
+// Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamically
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers, updatePlayer, addSalaryPayment, issueWarning, setBanStatus } from '../lib/players';
 import { watchInvestmentCampaigns } from '../lib/investments';
 import { watchSalaryRequests } from '../lib/salaryRequests';
-import { PlayerProfile, InvestmentCampaign, SalaryRequest } from '../types';
+import { watchPerformanceLogs } from '../lib/performanceLogs';
+import { watchMVPSettings, checkAndResetSeason } from '../lib/settings';
+import { PlayerProfile, InvestmentCampaign, SalaryRequest, PerformanceLog, MVPSettings } from '../types';
+import { getSeasonRankedPlayers } from '../utils/mvp';
 import { PlayerModal } from '../components/PlayerModal';
 import { SalaryModal } from '../components/SalaryModal';
 import { SetSalaryRateModal } from '../components/SetSalaryRateModal';
@@ -23,7 +27,8 @@ import {
   Flame,
   AlertOctagon,
   Edit,
-  UserCheck
+  UserCheck,
+  Crown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -48,6 +53,15 @@ export const Players: React.FC = () => {
   const [salaryRequests, setSalaryRequests] = useState<SalaryRequest[]>([]);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
+  // Performance Logs and MVP states
+  const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
+  const [mvpSettings, setMvpSettings] = useState<MVPSettings>({
+    kdWeight: 10,
+    killsWeight: 1,
+    damageWeight: 0.1,
+    seasonStartDate: new Date().toISOString()
+  });
+
   // Custom inline confirmations state
   const [confirmingWarnId, setConfirmingWarnId] = useState<string | null>(null);
   const [warningReason, setWarningReason] = useState('Unprofessional conduct / missing practice');
@@ -67,12 +81,25 @@ export const Players: React.FC = () => {
       setSalaryRequests(data);
     });
 
+    const unsubLogs = watchPerformanceLogs((logs) => {
+      setPerformanceLogs(logs);
+    });
+
+    const unsubSettings = watchMVPSettings((settings) => {
+      setMvpSettings(settings);
+      if (settings.seasonStartDate) {
+        checkAndResetSeason(settings, !!isAdmin);
+      }
+    });
+
     return () => {
       unsubPlayers();
       unsubCampaigns();
       unsubRequests();
+      unsubLogs();
+      unsubSettings();
     };
-  }, []);
+  }, [isAdmin]);
 
   const handleEditPlayer = (player: PlayerProfile) => {
     setSelectedPlayer(player);
@@ -137,13 +164,17 @@ export const Players: React.FC = () => {
     return matchesSearch && matchesRole;
   });
 
+  // Season MVP Calculations
+  const seasonRankedPlayers = getSeasonRankedPlayers(players, performanceLogs, mvpSettings);
+  const seasonMvp = seasonRankedPlayers.length > 0 ? seasonRankedPlayers[0] : null;
+
   return (
     <div className="flex min-h-screen bg-[#050507]">
       {/* Sidebar Layout Navigation */}
       <Sidebar />
 
       {/* Main Content Dashboard Area */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto">
         <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
             <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
@@ -270,59 +301,115 @@ export const Players: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Assigned Campaigns Section */}
-                <div className="bg-[#0c0c14] border border-purple-500/15 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none"></div>
-                  <div>
-                    <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter mb-1 flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-purple-400 animate-pulse" />
-                      <span>MATCH CAMPAIGNS</span>
-                    </h3>
-                    <p className="text-gray-400 text-xs mb-4 font-mono">Assigned campaigns for your lineup division ({user.lineup || '1st Lineup'})</p>
+                {/* Sidebar Highlight Columns (Season MVP + Campaigns) */}
+                <div className="flex flex-col gap-6">
+                  {/* Season MVP Card */}
+                  <div className="bg-[#0c0c14] border border-amber-500/25 rounded-3xl p-6 relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.05)]">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
+                          <Crown className="w-5 h-5 text-amber-400 animate-pulse" />
+                          <span>SEASON MVP</span>
+                        </h3>
+                        <span className="text-[9px] font-mono text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded">
+                          TOP PLAYER
+                        </span>
+                      </div>
 
-                    {(() => {
-                      const myLineup = user.lineup || '1st Lineup';
-                      const assignedCampaigns = campaigns.filter(c => c.lineup === myLineup);
+                      {seasonMvp ? (
+                        <div>
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold font-mono text-base">
+                              #1
+                            </div>
+                            <div>
+                              <h4 className="text-base font-bold text-white uppercase tracking-wide truncate max-w-[140px]">{seasonMvp.name}</h4>
+                              <span className="text-[10px] font-mono text-purple-400 uppercase">{seasonMvp.role}</span>
+                            </div>
+                          </div>
 
-                      if (assignedCampaigns.length === 0) {
+                          <div className="grid grid-cols-4 gap-2 border-t border-white/5 pt-4 font-mono text-[9px] text-gray-500">
+                            <div className="text-center">
+                              <span className="block uppercase text-[8px] mb-0.5">Matches</span>
+                              <strong className="text-white text-xs">{seasonMvp.matches}</strong>
+                            </div>
+                            <div className="text-center border-l border-white/5">
+                              <span className="block uppercase text-[8px] mb-0.5">Booyahs</span>
+                              <strong className="text-white text-xs">{seasonMvp.booyahs}</strong>
+                            </div>
+                            <div className="text-center border-l border-white/5">
+                              <span className="block uppercase text-[8px] mb-0.5">Kills</span>
+                              <strong className="text-white text-xs">{seasonMvp.kills}</strong>
+                            </div>
+                            <div className="text-center border-l border-white/5 bg-amber-500/5 rounded p-0.5">
+                              <span className="block uppercase text-[8px] text-amber-500 font-bold mb-0.5">SCORE</span>
+                              <strong className="text-amber-400 text-xs font-black">{seasonMvp.score}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-gray-500 font-mono text-xs border border-dashed border-white/5 rounded-2xl">
+                          No performance logged this season.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Assigned Campaigns Section */}
+                  <div className="bg-[#0c0c14] border border-purple-500/15 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                    <div>
+                      <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter mb-1 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-purple-400 animate-pulse" />
+                        <span>MATCH CAMPAIGNS</span>
+                      </h3>
+                      <p className="text-gray-400 text-xs mb-4 font-mono">Assigned campaigns for your lineup division ({user.lineup || '1st Lineup'})</p>
+
+                      {(() => {
+                        const myLineup = user.lineup || '1st Lineup';
+                        const assignedCampaigns = campaigns.filter(c => c.lineup === myLineup);
+
+                        if (assignedCampaigns.length === 0) {
+                          return (
+                            <div className="py-8 text-center text-gray-500 font-mono text-xs border border-dashed border-white/5 rounded-2xl">
+                              No campaigns assigned to your lineup.
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div className="py-8 text-center text-gray-500 font-mono text-xs border border-dashed border-white/5 rounded-2xl">
-                            No campaigns assigned to your lineup.
+                          <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
+                            {assignedCampaigns.map(camp => (
+                              <div key={camp.id} className="bg-[#050507]/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1 transition-all">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wider truncate max-w-[140px]">{camp.title}</span>
+                                  <span className={`text-[8px] font-mono uppercase px-1.5 py-0.5 rounded border ${
+                                    camp.status === 'win'
+                                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                                      : camp.status === 'lose'
+                                        ? 'bg-red-500/15 text-red-400 border-red-500/25'
+                                        : 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+                                  }`}>
+                                    {camp.status}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
+                                  <span className="uppercase text-[9px] text-purple-400">{camp.category}</span>
+                                  <span>Invested: <strong className="text-white">${camp.amount}</strong></span>
+                                </div>
+                                {camp.status === 'win' && camp.prizeAmount !== undefined && (
+                                  <div className="text-[10px] font-mono text-emerald-400 mt-0.5 flex justify-between">
+                                    <span>Prize won:</span>
+                                    <strong>+${camp.prizeAmount}</strong>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         );
-                      }
-
-                      return (
-                        <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
-                          {assignedCampaigns.map(camp => (
-                            <div key={camp.id} className="bg-[#050507]/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1 transition-all">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white uppercase tracking-wider truncate max-w-[140px]">{camp.title}</span>
-                                <span className={`text-[8px] font-mono uppercase px-1.5 py-0.5 rounded border ${
-                                  camp.status === 'win'
-                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
-                                    : camp.status === 'lose'
-                                      ? 'bg-red-500/15 text-red-400 border-red-500/25'
-                                      : 'bg-amber-500/15 text-amber-400 border-amber-500/25'
-                                }`}>
-                                  {camp.status}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
-                                <span className="uppercase text-[9px] text-purple-400">{camp.category}</span>
-                                <span>Invested: <strong className="text-white">${camp.amount}</strong></span>
-                              </div>
-                              {camp.status === 'win' && camp.prizeAmount !== undefined && (
-                                <div className="text-[10px] font-mono text-emerald-400 mt-0.5 flex justify-between">
-                                  <span>Prize won:</span>
-                                  <strong>+${camp.prizeAmount}</strong>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
