@@ -1,4 +1,4 @@
-// Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamicallyy
+// Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamically
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers, updatePlayer, addSalaryPayment, issueWarning, setBanStatus } from '../lib/players';
@@ -100,6 +100,19 @@ export const Players: React.FC = () => {
       unsubSettings();
     };
   }, [isAdmin]);
+
+  // Run midnight daily auto-sync when page mounts or players/performanceLogs are updated
+  useEffect(() => {
+    if (players.length > 0 && performanceLogs.length > 0) {
+      import('../lib/sync').then(({ checkAndTriggerDailySync }) => {
+        checkAndTriggerDailySync(players, performanceLogs, !!isAdmin).then((res) => {
+          if (res.triggered && res.success && res.updatedCount > 0) {
+            toast.success(`Midnight Auto-Sync: Automatically updated scoring stats for ${res.updatedCount} active players!`);
+          }
+        });
+      });
+    }
+  }, [players, performanceLogs, isAdmin]);
 
   const handleEditPlayer = (player: PlayerProfile) => {
     setSelectedPlayer(player);
