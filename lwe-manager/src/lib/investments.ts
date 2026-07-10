@@ -42,41 +42,20 @@ export function watchInvestmentCampaigns(callback: (campaigns: InvestmentCampaig
     q,
     (snapshot) => {
       const campaigns: InvestmentCampaign[] = [];
-      const now = new Date();
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        const campaignDate = data.date ? new Date(data.date) : null;
-        
-        let isExpired = false;
-        if (campaignDate) {
-          const diffTime = Math.abs(now.getTime() - campaignDate.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          if (diffDays > 30) {
-            isExpired = true;
-          }
-        }
-
-        if (isExpired) {
-          try {
-            const docRef = doc(db, CAMPAIGNS_COLLECTION, docSnap.id);
-            deleteDoc(docRef);
-          } catch (e) {
-            console.warn("Auto-deletion of 30-day old campaign failed:", e);
-          }
-        } else {
-          campaigns.push({
-            id: docSnap.id,
-            title: data.title || '',
-            category: data.category || 'scrim',
-            amount: Number(data.amount) || 0,
-            date: data.date || '',
-            status: data.status || 'active',
-            prizeAmount: data.prizeAmount !== undefined ? Number(data.prizeAmount) : undefined,
-            resolvedAt: data.resolvedAt || undefined,
-            addedBy: data.addedBy || 'Admin',
-            lineup: data.lineup || '1st Lineup'
-          });
-        }
+        campaigns.push({
+          id: docSnap.id,
+          title: data.title || '',
+          category: data.category || 'scrim',
+          amount: Number(data.amount) || 0,
+          date: data.date || '',
+          status: data.status || 'active',
+          prizeAmount: data.prizeAmount !== undefined ? Number(data.prizeAmount) : undefined,
+          resolvedAt: data.resolvedAt || undefined,
+          addedBy: data.addedBy || 'Admin',
+          lineup: data.lineup || '1st Lineup'
+        });
       });
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(campaigns));
       notifyCampaignWatchers(campaigns);
