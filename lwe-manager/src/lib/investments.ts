@@ -192,3 +192,23 @@ export async function resolveInvestmentCampaign(
     console.warn("Firestore resolveInvestmentCampaign failed, updated locally only:", error);
   }
 }
+
+/**
+ * Manually delete an investment campaign (Admin feature)
+ */
+export async function deleteInvestmentCampaign(campaignId: string) {
+  // Update local storage first
+  const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (local) {
+    const list: InvestmentCampaign[] = JSON.parse(local);
+    const updated = list.filter(c => c.id !== campaignId);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+    notifyCampaignWatchers(updated);
+  }
+
+  // Delete from Firestore (only if not a mock local ID)
+  if (!campaignId.startsWith('campaign_local_')) {
+    const docRef = doc(db, CAMPAIGNS_COLLECTION, campaignId);
+    await deleteDoc(docRef);
+  }
+}
