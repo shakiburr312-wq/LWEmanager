@@ -6,6 +6,7 @@ import {
   query, 
   orderBy,
   updateDoc,
+  deleteDoc,
   increment
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -113,5 +114,25 @@ export function watchFinanceTransactions(callback: (transactions: FinanceTransac
     financeWatchers = financeWatchers.filter(cb => cb !== callback);
     unsub();
   };
+}
+
+/**
+ * Manually delete a ledger transaction (Admin feature)
+ */
+export async function deleteFinanceTransaction(txId: string) {
+  // Update local storage first
+  const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (local) {
+    const list: FinanceTransaction[] = JSON.parse(local);
+    const updated = list.filter(t => t.id !== txId);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+    notifyFinanceWatchers(updated);
+  }
+
+  // Delete from Firestore (only if not a mock local ID)
+  if (!txId.startsWith('finance_local_')) {
+    const docRef = doc(db, 'financeTransactions', txId);
+    await deleteDoc(docRef);
+  }
 }
 
