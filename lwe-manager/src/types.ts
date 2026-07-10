@@ -1,3 +1,4 @@
+// Replacement of /src/types.ts - Updated to include seasonStartDate in MVPSettings and added PerformanceLog interface
 export type UserRole = 'admin' | 'player';
 export type UserStatus = 'pending' | 'active' | 'banned' | 'rejected';
 
@@ -80,6 +81,19 @@ export interface MVPSettings {
   kdWeight: number;
   killsWeight: number;
   damageWeight: number;
+  seasonStartDate?: string;
+}
+
+export interface PerformanceLog {
+  id?: string;
+  playerId: string;
+  playerName: string;
+  date: string;
+  matches: number;
+  booyahs: number;
+  kills: number;
+  damage: number;
+  addedBy: string;
 }
 
 export interface InvestmentCampaign {
