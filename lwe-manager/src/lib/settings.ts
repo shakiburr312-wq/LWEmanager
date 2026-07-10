@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS: MVPSettings = {
   kdWeight: 10, 
   killsWeight: 1, 
   damageWeight: 0.1,
-  seasonStartDate: new Date().toISOString()
+  seasonStartDate: '2026-07-01T00:00:00.000Z'
 };
 
 let settingsWatchers: ((settings: MVPSettings) => void)[] = [];
@@ -61,7 +61,7 @@ export function watchMVPSettings(callback: (settings: MVPSettings) => void) {
           kdWeight: Number(data.kdWeight) ?? 10,
           killsWeight: Number(data.killsWeight) ?? 1,
           damageWeight: Number(data.damageWeight) ?? 0.1,
-          seasonStartDate: data.seasonStartDate || new Date().toISOString()
+          seasonStartDate: data.seasonStartDate || '2026-07-01T00:00:00.000Z'
         };
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
         notifyWatchers(updated);
