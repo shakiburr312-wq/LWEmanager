@@ -1,4 +1,4 @@
-// Replacement of /src/components/Sidebar.tsx - Added mobile hamburger navigation and fully responsive mobile layout
+// Replacement of /src/components/Sidebar.tsx - Added mobile hamburger navigation and fully responsive mobile layouts
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
