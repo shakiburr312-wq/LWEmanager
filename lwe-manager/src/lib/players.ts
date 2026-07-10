@@ -129,6 +129,32 @@ export async function updatePlayer(playerId: string, data: Partial<PlayerProfile
   }
 }
 
+export async function updatePlayerWallet(playerId: string, amountChange: number) {
+  // Update local storage first
+  const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (local) {
+    const list: PlayerProfile[] = JSON.parse(local);
+    const index = list.findIndex(p => p.id === playerId);
+    if (index !== -1) {
+      list[index] = {
+        ...list[index],
+        wallet: (list[index].wallet || 0) + amountChange
+      };
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+      notifyPlayerWatchers(list);
+    }
+  }
+
+  try {
+    const playerRef = doc(db, 'players', playerId);
+    await updateDoc(playerRef, {
+      wallet: increment(amountChange)
+    });
+  } catch (error) {
+    console.warn("Firestore updatePlayerWallet failed, updated locally only:", error);
+  }
+}
+
 /**
  * Adds a salary payment:
  * 1. Increment player's wallet balance
@@ -141,7 +167,8 @@ export async function addSalaryPayment(
   amount: number, 
   reason: string, 
   addedBy: string,
-  paymentMethod: 'bKash' | 'Nagad'
+  paymentMethod: 'bKash' | 'Nagad',
+  adminId?: string
 ) {
   // Update local storage first
   const local = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -153,6 +180,16 @@ export async function addSalaryPayment(
         ...list[index],
         wallet: (list[index].wallet || 0) + amount
       };
+      // If adminId is provided, also deduct locally
+      if (adminId) {
+        const adminIndex = list.findIndex(p => p.id === adminId);
+        if (adminIndex !== -1) {
+          list[adminIndex] = {
+            ...list[adminIndex],
+            wallet: (list[adminIndex].wallet || 0) - amount
+          };
+        }
+      }
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
       notifyPlayerWatchers(list);
     }
@@ -160,7 +197,7 @@ export async function addSalaryPayment(
 
   // Record mock transactions locally as well to remain responsive
   try {
-    const localFinance = localStorage.getItem('lwe_finance_tx_fallback');
+    const localFinance = localStorage.getItem('lwe_finance_tx_fallback_v2');
     const fList = localFinance ? JSON.parse(localFinance) : [];
     fList.unshift({
       id: 'fin_local_' + Math.random().toString(36).substr(2, 9),
@@ -170,7 +207,7 @@ export async function addSalaryPayment(
       addedBy,
       date: new Date().toISOString()
     });
-    localStorage.setItem('lwe_finance_tx_fallback', JSON.stringify(fList));
+    localStorage.setItem('lwe_finance_tx_fallback_v2', JSON.stringify(fList));
   } catch (e) {
     console.warn("Failed to update local finance list during salary:", e);
   }
@@ -184,6 +221,13 @@ export async function addSalaryPayment(
     await updateDoc(playerRef, {
       wallet: increment(amount)
     });
+
+    if (adminId) {
+      const adminRef = doc(db, 'players', adminId);
+      await updateDoc(adminRef, {
+        wallet: increment(-amount)
+      });
+    }
 
     await addDoc(salaryTransRef, {
       playerId,
