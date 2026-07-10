@@ -4,18 +4,17 @@ import {
   addDoc, 
   onSnapshot, 
   query, 
-  orderBy 
+  orderBy,
+  updateDoc,
+  increment
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { FinanceTransaction } from '../types';
+import { updatePlayerWallet } from './players';
 
 const LOCAL_STORAGE_KEY = 'lwe_finance_tx_fallback_v2';
 
-const DEFAULT_TRANSACTIONS: FinanceTransaction[] = [
-  { id: 'ft1', type: 'invest', amount: 0, description: 'Sponsor Investment Outlay', date: new Date(Date.now() - 5*24*60*60*1000).toISOString(), addedBy: 'System' },
-  { id: 'ft2', type: 'tournament_profit', amount: 0, description: 'LWE Arena Championship Prize', date: new Date(Date.now() - 3*24*60*60*1000).toISOString(), addedBy: 'System' },
-  { id: 'ft3', type: 'salary_payment', amount: 0, description: 'Asif June 2026 Monthly Salary Payment', date: new Date(Date.now() - 1*24*60*60*1000).toISOString(), addedBy: 'System' }
-];
+const DEFAULT_TRANSACTIONS: FinanceTransaction[] = [];
 
 let financeWatchers: ((transactions: FinanceTransaction[]) => void)[] = [];
 
@@ -24,13 +23,14 @@ function notifyFinanceWatchers(transactions: FinanceTransaction[]) {
 }
 
 /**
- * Add a new finance transaction (investment, tournament profit, or salary payment)
+ * Add a new finance transaction (investment, tournament profit, salary payment, or withdrawal)
  */
 export async function addFinanceTransaction(
-  type: 'invest' | 'tournament_profit' | 'salary_payment',
+  type: 'invest' | 'tournament_profit' | 'salary_payment' | 'withdraw',
   amount: number,
   description: string,
-  addedBy: string
+  addedBy: string,
+  adminId?: string
 ) {
   const transactionData = {
     type,
@@ -51,6 +51,20 @@ export async function addFinanceTransaction(
   try {
     const financeRef = collection(db, 'financeTransactions');
     await addDoc(financeRef, transactionData);
+
+    // Adjust Admin Wallet (central balance) in Firestore if adminId is provided
+    if (adminId) {
+      let change = 0;
+      if (type === 'invest' || type === 'tournament_profit') {
+        change = amount;
+      } else if (type === 'withdraw' || type === 'salary_payment') {
+        change = -amount;
+      }
+
+      if (change !== 0) {
+        await updatePlayerWallet(adminId, change);
+      }
+    }
   } catch (error) {
     console.warn("Firestore addFinanceTransaction failed, saved locally:", error);
   }
