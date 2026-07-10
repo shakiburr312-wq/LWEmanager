@@ -1,4 +1,4 @@
-// Replacements of /src/pages/Stats.tsx - Performance hub refactored to support Season-based MVP calculations and dynamic leaderboard
+// Replacement of /src/pages/Stats.tsx - Performance hub refactored to support Season-based MVP calculations and dynamic leaderboard
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers } from '../lib/players';
@@ -10,6 +10,7 @@ import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
 import { Trophy, Crown, Star, Medal, Crosshair, Flame, TrendingUp, Sparkles, BarChart3, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
+import toast from 'react-hot-toast';
 
 export const Stats: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -52,6 +53,19 @@ export const Stats: React.FC = () => {
       unsubSettings();
     };
   }, [isAdmin]);
+
+  // Run midnight daily auto-sync when page mounts or players/performanceLogs are updated
+  useEffect(() => {
+    if (players.length > 0 && performanceLogs.length > 0) {
+      import('../lib/sync').then(({ checkAndTriggerDailySync }) => {
+        checkAndTriggerDailySync(players, performanceLogs, !!isAdmin).then((res) => {
+          if (res.triggered && res.success && res.updatedCount > 0) {
+            toast.success(`Midnight Auto-Sync: Automatically updated scoring stats for ${res.updatedCount} active players!`);
+          }
+        });
+      });
+    }
+  }, [players, performanceLogs, isAdmin]);
 
   // Compute Season-Based Rankings
   const rankedPlayers: SeasonRankedPlayer[] = getSeasonRankedPlayers(players, performanceLogs, mvpSettings);
