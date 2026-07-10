@@ -6,7 +6,7 @@ import { watchPerformanceLogs, addPerformanceLogs, updatePerformanceLog, deleteP
 import { PlayerProfile, PerformanceLog } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
-import { Save, Calendar, User, Eye, Plus, TrendingUp, BarChart2, Edit, Trash2, Check, X, Search } from 'lucide-react';
+import { Save, Calendar, User, Eye, Plus, TrendingUp, BarChart2, Edit, Trash2, Check, X, Search, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface PlayerStatsInput {
@@ -19,11 +19,12 @@ interface PlayerStatsInput {
 type StatsInputsState = Record<string, PlayerStatsInput>;
 
 export const DailyStats: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [inputs, setInputs] = useState<StatsInputsState>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Performance Log History States
   const [logs, setLogs] = useState<PerformanceLog[]>([]);
@@ -51,6 +52,38 @@ export const DailyStats: React.FC = () => {
       unsubLogs();
     };
   }, []);
+
+  // Run midnight daily auto-sync when page mounts or players/logs are updated
+  useEffect(() => {
+    if (players.length > 0 && logs.length > 0) {
+      import('../lib/sync').then(({ checkAndTriggerDailySync }) => {
+        checkAndTriggerDailySync(players, logs, !!isAdmin).then((res) => {
+          if (res.triggered && res.success && res.updatedCount > 0) {
+            toast.success(`Midnight Auto-Sync: Automatically updated scoring stats for ${res.updatedCount} active players!`);
+          }
+        });
+      });
+    }
+  }, [players, logs, isAdmin]);
+
+  const handleManualSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    const toastId = toast.loading('Synchronizing and updating player scores...');
+    try {
+      const { performScoreSync } = await import('../lib/sync');
+      const result = await performScoreSync(players, logs);
+      if (result.success) {
+        toast.success(`Successfully synchronized scores! Updated ${result.updatedCount} players.`, { id: toastId });
+      } else {
+        toast.error('Failed to sync scores.', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('Sync failed: ' + err.message, { id: toastId });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleInputChange = (playerId: string, field: keyof PlayerStatsInput, valStr: string) => {
     const val = parseInt(valStr) || 0;
@@ -89,6 +122,11 @@ export const DailyStats: React.FC = () => {
     const toastId = toast.loading('Saving bulk performance entries to database...');
     try {
       await addPerformanceLogs(logsToSave);
+      
+      // Run score synchronization in the background
+      const { performScoreSync } = await import('../lib/sync');
+      await performScoreSync(players, [...logsToSave, ...logs]);
+
       toast.success(`Successfully recorded performance stats for ${logsToSave.length} players!`, { id: toastId });
       // Reset all form inputs to 0
       setInputs({});
@@ -125,6 +163,18 @@ export const DailyStats: React.FC = () => {
         kills: Number(editForm.kills),
         damage: Number(editForm.damage),
       });
+
+      // Recalculate locally and sync
+      const updatedLogs = logs.map(l => l.id === logId ? {
+        ...l,
+        matches: Number(editForm.matches),
+        booyahs: Number(editForm.booyahs),
+        kills: Number(editForm.kills),
+        damage: Number(editForm.damage),
+      } : l);
+      const { performScoreSync } = await import('../lib/sync');
+      await performScoreSync(players, updatedLogs);
+
       toast.success('Stats successfully corrected!', { id: toastId });
       setEditingLogId(null);
       setEditForm(null);
@@ -140,6 +190,12 @@ export const DailyStats: React.FC = () => {
     const toastId = toast.loading('Deleting stats entry...');
     try {
       await deletePerformanceLog(logId);
+
+      // Recalculate locally and sync
+      const remainingLogs = logs.filter(l => l.id !== logId);
+      const { performScoreSync } = await import('../lib/sync');
+      await performScoreSync(players, remainingLogs);
+
       toast.success('Stats log deleted successfully!', { id: toastId });
     } catch (error: any) {
       toast.error('Failed to delete stats: ' + error.message, { id: toastId });
@@ -161,6 +217,16 @@ export const DailyStats: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
             <BalanceIndicator />
+            {isAdmin && (
+              <button
+                onClick={handleManualSync}
+                disabled={syncing}
+                className="px-4 py-2.5 bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 hover:border-purple-500 rounded-xl font-mono text-[10px] text-purple-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span>{syncing ? 'SYNCING...' : 'SYNC SCORES'}</span>
+              </button>
+            )}
             <div className="bg-[#11111a] border border-white/5 px-4 py-2.5 rounded-xl font-mono text-[10px] text-purple-400 uppercase tracking-wider flex items-center gap-2">
               <Calendar className="w-3.5 h-3.5" />
               <span>Session Date: {new Date().toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
