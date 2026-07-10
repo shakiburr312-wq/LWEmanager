@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers, updatePlayer, addSalaryPayment, issueWarning, setBanStatus } from '../lib/players';
 import { watchInvestmentCampaigns } from '../lib/investments';
-import { PlayerProfile, InvestmentCampaign } from '../types';
+import { watchSalaryRequests } from '../lib/salaryRequests';
+import { PlayerProfile, InvestmentCampaign, SalaryRequest } from '../types';
 import { PlayerModal } from '../components/PlayerModal';
 import { SalaryModal } from '../components/SalaryModal';
 import { SetSalaryRateModal } from '../components/SetSalaryRateModal';
+import { RequestSalaryModal } from '../components/RequestSalaryModal';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
 import { 
@@ -43,6 +45,9 @@ export const Players: React.FC = () => {
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [ratePlayer, setRatePlayer] = useState<PlayerProfile | null>(null);
 
+  const [salaryRequests, setSalaryRequests] = useState<SalaryRequest[]>([]);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+
   // Custom inline confirmations state
   const [confirmingWarnId, setConfirmingWarnId] = useState<string | null>(null);
   const [warningReason, setWarningReason] = useState('Unprofessional conduct / missing practice');
@@ -58,9 +63,14 @@ export const Players: React.FC = () => {
       setCampaigns(data);
     });
 
+    const unsubRequests = watchSalaryRequests((data) => {
+      setSalaryRequests(data);
+    });
+
     return () => {
       unsubPlayers();
       unsubCampaigns();
+      unsubRequests();
     };
   }, []);
 
@@ -93,7 +103,7 @@ export const Players: React.FC = () => {
 
   const handleCommitSalary = async (amount: number, reason: string, paymentMethod: 'bKash' | 'Nagad') => {
     if (salaryPlayer && user) {
-      await addSalaryPayment(salaryPlayer.id, salaryPlayer.name, amount, reason, user.name, paymentMethod);
+      await addSalaryPayment(salaryPlayer.id, salaryPlayer.name, amount, reason, user.name, paymentMethod, user.uid);
     }
   };
 
@@ -192,11 +202,39 @@ export const Players: React.FC = () => {
                 <div className="lg:col-span-2 bg-gradient-to-r from-purple-950/10 via-[#0c0c14]/80 to-purple-950/10 border border-purple-500/15 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl pointer-events-none"></div>
                   <div>
-                    <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter mb-1 flex items-center gap-2">
-                      <Award className="w-5 h-5 text-purple-400 animate-pulse" />
-                      <span>MY TEAM ({user.lineup || '1st Lineup'})</span>
-                    </h3>
-                    <p className="text-gray-400 text-xs mb-5 font-mono">Meet the active roster fighting alongside you in the {user.lineup || '1st Lineup'}</p>
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter mb-1 flex items-center gap-2">
+                          <Award className="w-5 h-5 text-purple-400 animate-pulse" />
+                          <span>MY TEAM ({user.lineup || '1st Lineup'})</span>
+                        </h3>
+                        <p className="text-gray-400 text-xs font-mono">Meet the active roster fighting alongside you in the {user.lineup || '1st Lineup'}</p>
+                      </div>
+
+                      {!isAdmin && (
+                        <button
+                          onClick={() => setIsRequestModalOpen(true)}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase rounded-lg shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-all cursor-pointer font-mono"
+                        >
+                          Request Salary
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Show current player's request status if any exists */}
+                    {(() => {
+                      const myRequests = salaryRequests.filter(r => r.playerId === user?.uid && r.status === 'pending');
+                      if (myRequests.length === 0) return null;
+                      return (
+                        <div className="mb-4 bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+                            <span className="text-xs text-purple-300 font-mono">Pending Salary Request of <strong className="text-white">${myRequests[0].amount}</strong> is in queue</span>
+                          </div>
+                          <span className="text-[10px] uppercase font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">Pending Approval</span>
+                        </div>
+                      );
+                    })()}
 
                     {(() => {
                       const myLineup = user.lineup || '1st Lineup';
@@ -523,6 +561,12 @@ export const Players: React.FC = () => {
           onClose={() => setIsRateModalOpen(false)}
           onSaveRate={handleSaveSalaryRate}
           player={ratePlayer}
+        />
+
+        <RequestSalaryModal
+          isOpen={isRequestModalOpen}
+          onClose={() => setIsRequestModalOpen(false)}
+          playerProfile={players.find(p => p.id === user?.uid) || null}
         />
       </main>
     </div>
