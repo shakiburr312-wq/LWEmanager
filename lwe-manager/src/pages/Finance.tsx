@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addFinanceTransaction, watchFinanceTransactions } from '../lib/finance';
 import { watchInvestmentCampaigns, addInvestmentCampaign, resolveInvestmentCampaign } from '../lib/investments';
-import { FinanceTransaction, InvestmentCampaign } from '../types';
+import { watchSalaryRequests, approveSalaryRequest, rejectSalaryRequest } from '../lib/salaryRequests';
+import { FinanceTransaction, InvestmentCampaign, SalaryRequest } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
 import { 
@@ -41,10 +42,16 @@ export const Finance: React.FC = () => {
 
   // Quick form input states
   const [showLogModal, setShowLogModal] = useState(false);
-  const [logType, setLogType] = useState<'invest' | 'tournament_profit'>('invest');
+  const [logType, setLogType] = useState<'invest' | 'withdraw'>('invest');
   const [amount, setAmount] = useState('500');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Salary Requests State
+  const [salaryRequests, setSalaryRequests] = useState<SalaryRequest[]>([]);
+  const [approvingRequestId, setApprovingRequestId] = useState<string | null>(null);
+  const [approvalMethod, setApprovalMethod] = useState<'bKash' | 'Nagad'>('bKash');
+  const [confirmingApproval, setConfirmingApproval] = useState(false);
 
   // Investment Campaign states
   const [campaigns, setCampaigns] = useState<InvestmentCampaign[]>([]);
@@ -70,9 +77,14 @@ export const Finance: React.FC = () => {
       setLoading(false);
     });
 
+    const unsubscribeRequests = watchSalaryRequests((data) => {
+      setSalaryRequests(data);
+    });
+
     return () => {
       unsubscribeTx();
       unsubscribeCampaigns();
+      unsubscribeRequests();
     };
   }, []);
 
@@ -94,8 +106,8 @@ export const Finance: React.FC = () => {
     setSubmitting(true);
     const toastId = toast.loading('Recording financial transaction...');
     try {
-      await addFinanceTransaction(logType, amountNum, description.trim(), user.name);
-      toast.success(`Successfully logged $${amountNum} ${logType === 'invest' ? 'Investment' : 'Tournament Profit'}`, { id: toastId });
+      await addFinanceTransaction(logType, amountNum, description.trim(), user.name, user.uid);
+      toast.success(`Successfully logged $${amountNum} ${logType === 'invest' ? 'Deposit' : 'Withdrawal'}`, { id: toastId });
       setDescription('');
       setAmount('500');
       setShowLogModal(false);
@@ -135,7 +147,8 @@ export const Finance: React.FC = () => {
         amountNum,
         campaignDate,
         user.name,
-        campaignLineup
+        campaignLineup,
+        user.uid
       );
       toast.success(`Started ${campaignCategory} campaign for ${campaignLineup} with $${amountNum} investment!`, { id: toastId });
       setCampaignTitle('');
@@ -160,12 +173,44 @@ export const Finance: React.FC = () => {
 
     const toastId = toast.loading(`Resolving campaign as ${status.toUpperCase()}...`);
     try {
-      await resolveInvestmentCampaign(campaignId, status, prizeNum);
+      await resolveInvestmentCampaign(campaignId, status, prizeNum, user.uid);
       toast.success(`Campaign resolved successfully!`, { id: toastId });
       setResolvingId(null);
       setPrizeInput('');
     } catch (err: any) {
       toast.error('Failed to resolve campaign: ' + err.message, { id: toastId });
+    }
+  };
+
+  const handleApproveRequest = async (request: SalaryRequest) => {
+    if (!user) return;
+    try {
+      const toastId = toast.loading(`Processing salary request approval...`);
+      await approveSalaryRequest(
+        request.id,
+        request.playerId,
+        request.playerName,
+        request.amount,
+        user.uid,
+        user.name,
+        approvalMethod
+      );
+      toast.success(`Approved salary request of $${request.amount} for ${request.playerName}!`, { id: toastId });
+      setApprovingRequestId(null);
+      setConfirmingApproval(false);
+    } catch (err: any) {
+      toast.error('Failed to approve request: ' + err.message);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!user) return;
+    try {
+      const toastId = toast.loading(`Rejecting salary request...`);
+      await rejectSalaryRequest(requestId, user.name);
+      toast.success(`Rejected salary request!`, { id: toastId });
+    } catch (err: any) {
+      toast.error('Failed to reject request: ' + err.message);
     }
   };
 
@@ -182,12 +227,16 @@ export const Finance: React.FC = () => {
     .filter(t => t.type === 'salary_payment')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const totalWithdraw = transactions
+    .filter(t => t.type === 'withdraw')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const totalCampaignOutlay = campaigns.reduce((sum, c) => sum + c.amount, 0);
   const totalCampaignWinnings = campaigns
     .filter(c => c.status === 'win')
     .reduce((sum, c) => sum + (c.prizeAmount || 0), 0);
 
-  const netHisab = totalProfit + totalInvest - totalSalary + totalCampaignWinnings - totalCampaignOutlay;
+  const netHisab = totalProfit + totalInvest - totalSalary - totalWithdraw + totalCampaignWinnings - totalCampaignOutlay;
 
   // Chart data mapping (reverse to show chronological order)
   const chartData = [...transactions].reverse().map((t, idx) => ({
@@ -335,6 +384,99 @@ export const Finance: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Pending Salary Requests Section (visible to Admins) */}
+            {isAdmin && (
+              <div className="bg-[#0c0c14] border border-white/5 rounded-3xl p-6 flex flex-col">
+                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 mb-4 flex items-center space-x-2">
+                  <DollarSign className="w-4 h-4 text-purple-400" />
+                  <span>Pending Player Salary Requests ({salaryRequests.filter(r => r.status === 'pending').length})</span>
+                </h3>
+
+                {salaryRequests.filter(r => r.status === 'pending').length === 0 ? (
+                  <div className="py-6 flex items-center justify-center border border-white/5 border-dashed rounded-2xl text-center text-gray-500 font-mono text-xs">
+                    No pending player salary requests in the queue.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {salaryRequests.filter(r => r.status === 'pending').map((req) => (
+                      <div key={req.id} className="bg-[#050507] border border-white/5 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-mono text-xs">
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1.5">
+                            <span className="text-white font-bold text-sm font-sans">{req.playerName}</span>
+                            <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">STIPEND REQUEST</span>
+                          </div>
+                          <p className="text-gray-400 text-xs mb-1 font-sans">{req.reason}</p>
+                          <span className="text-[10px] text-gray-500 font-sans">Submitted: {new Date(req.date).toLocaleString()}</span>
+                        </div>
+
+                        <div className="flex flex-col sm:items-end gap-2">
+                          <div className="text-right mb-1">
+                            <span className="text-xs text-gray-500 block uppercase">Requested Amount</span>
+                            <span className="text-lg font-black text-white">${req.amount}</span>
+                          </div>
+
+                          {approvingRequestId === req.id && confirmingApproval ? (
+                            <div className="bg-[#0c0c14] border border-purple-500/20 rounded-xl p-3 space-y-2 max-w-xs">
+                              <p className="text-[10px] text-purple-300 font-bold uppercase tracking-wider">Are you sure you want to approve?</p>
+                              
+                              <div className="space-y-1">
+                                <span className="text-[9px] text-gray-400 uppercase">Payout via:</span>
+                                <select 
+                                  value={approvalMethod}
+                                  onChange={(e) => setApprovalMethod(e.target.value as 'bKash' | 'Nagad')}
+                                  className="w-full bg-[#050507] border border-white/10 rounded-lg p-1.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                                >
+                                  <option value="bKash">bKash (Dropdown)</option>
+                                  <option value="Nagad">Nagad (Dropdown)</option>
+                                </select>
+                              </div>
+
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => handleApproveRequest(req)}
+                                  className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] uppercase rounded-lg"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setApprovingRequestId(null);
+                                    setConfirmingApproval(false);
+                                  }}
+                                  className="px-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg text-[10px]"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setApprovingRequestId(req.id);
+                                  setConfirmingApproval(true);
+                                  setApprovalMethod('bKash');
+                                }}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold uppercase transition-all"
+                              >
+                                Approve Payout
+                              </button>
+                              <button
+                                onClick={() => handleRejectRequest(req.id)}
+                                className="px-3 py-2 bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-400 rounded-xl text-xs border border-white/5 hover:border-red-500/20 transition-all cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Esports Tournament Campaigns Section */}
             <div className="bg-[#0c0c14] border border-white/5 rounded-3xl p-6 flex flex-col">
@@ -668,8 +810,8 @@ export const Finance: React.FC = () => {
                     onChange={(e) => setLogType(e.target.value as any)}
                     className="w-full bg-[#050507] border border-white/10 focus:border-purple-500 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all font-mono"
                   >
-                    <option value="invest">Investor Capital / Injection</option>
-                    <option value="tournament_profit">Tournament Profit / Prize Pool</option>
+                    <option value="invest">Deposit (Capital Injection)</option>
+                    <option value="withdraw">Withdraw (Capital Outflow)</option>
                   </select>
                 </div>
 
