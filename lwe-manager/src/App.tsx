@@ -1,3 +1,4 @@
+// Replacement of /src/App.tsx - Added route for Daily Stats Entry module
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
@@ -9,6 +10,7 @@ import { Complaints } from './pages/Complaints';
 import { SettingsPage } from './pages/Settings';
 import { Stats } from './pages/Stats';
 import { Finance } from './pages/Finance';
+import { DailyStats } from './pages/DailyStats';
 import { Toaster } from 'react-hot-toast';
 
 export default function App() {
@@ -59,6 +61,14 @@ export default function App() {
             element={
               <ProtectedRoute adminOnly={true}>
                 <Approvals />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/daily-stats" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <DailyStats />
               </ProtectedRoute>
             } 
           />
