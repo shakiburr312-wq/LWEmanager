@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { addFinanceTransaction, watchFinanceTransactions } from '../lib/finance';
-import { watchInvestmentCampaigns, addInvestmentCampaign, resolveInvestmentCampaign } from '../lib/investments';
+import { addFinanceTransaction, watchFinanceTransactions, deleteFinanceTransaction } from '../lib/finance';
+import { watchInvestmentCampaigns, addInvestmentCampaign, resolveInvestmentCampaign, deleteInvestmentCampaign } from '../lib/investments';
 import { watchSalaryRequests, approveSalaryRequest, rejectSalaryRequest } from '../lib/salaryRequests';
 import { FinanceTransaction, InvestmentCampaign, SalaryRequest } from '../types';
 import { Sidebar } from '../components/Sidebar';
@@ -22,7 +22,8 @@ import {
   Check,
   X,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -214,6 +215,32 @@ export const Finance: React.FC = () => {
     }
   };
 
+  const handleDeleteCampaign = async (campaignId: string) => {
+    if (!window.confirm('Are you sure you want to delete this investment campaign? This is irreversible and will not alter any historical balance records already calculated.')) {
+      return;
+    }
+    const toastId = toast.loading('Deleting investment campaign...');
+    try {
+      await deleteInvestmentCampaign(campaignId);
+      toast.success('Investment campaign deleted successfully!', { id: toastId });
+    } catch (err: any) {
+      toast.error('Failed to delete campaign: ' + err.message, { id: toastId });
+    }
+  };
+
+  const handleDeleteTransaction = async (txId: string) => {
+    if (!window.confirm('Are you sure you want to delete this ledger entry? This is irreversible and will not alter any historical player wallet balances already processed.')) {
+      return;
+    }
+    const toastId = toast.loading('Deleting ledger entry...');
+    try {
+      await deleteFinanceTransaction(txId);
+      toast.success('Ledger transaction deleted successfully!', { id: toastId });
+    } catch (err: any) {
+      toast.error('Failed to delete transaction: ' + err.message, { id: toastId });
+    }
+  };
+
   // Summary Math calculations
   const totalInvest = transactions
     .filter(t => t.type === 'invest')
@@ -252,7 +279,7 @@ export const Finance: React.FC = () => {
       <Sidebar />
 
       {/* Main Finance Container */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto">
         <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
@@ -540,9 +567,18 @@ export const Finance: React.FC = () => {
                             <span className="text-[9px] font-mono text-gray-500 block mt-1">Date: {new Date(c.date).toLocaleDateString()}</span>
                           </div>
 
-                          <div className="text-right">
+                          <div className="text-right flex flex-col items-end">
                             <span className="text-[9px] font-mono text-gray-500 block uppercase">Invested</span>
                             <span className="text-sm font-bold text-white font-mono">${c.amount.toLocaleString()}</span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteCampaign(c.id)}
+                                className="mt-2 p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors cursor-pointer flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold"
+                                title="Delete Campaign History"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -654,6 +690,7 @@ export const Finance: React.FC = () => {
                       <th className="py-3 px-4">Description</th>
                       <th className="py-3 px-4">Authorized By</th>
                       <th className="py-3 px-4 text-right">Amount (USD)</th>
+                      {isAdmin && <th className="py-3 px-4 text-right w-16">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 font-mono">
@@ -683,6 +720,17 @@ export const Finance: React.FC = () => {
                         }`}>
                           {tx.type === 'salary_payment' ? '-' : '+'}${tx.amount.toLocaleString()}
                         </td>
+                        {isAdmin && (
+                          <td className="py-4 px-4 text-right">
+                            <button
+                              onClick={() => handleDeleteTransaction(tx.id || '')}
+                              className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                              title="Delete Ledger Entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
