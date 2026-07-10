@@ -56,11 +56,24 @@ export interface Complaint {
 
 export interface FinanceTransaction {
   id: string;
-  type: 'invest' | 'tournament_profit' | 'salary_payment';
+  type: 'invest' | 'tournament_profit' | 'salary_payment' | 'withdraw';
   amount: number;
   description: string;
   date: string;
   addedBy: string;
+}
+
+export interface SalaryRequest {
+  id: string;
+  playerId: string;
+  playerName: string;
+  amount: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  date: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  paymentMethod?: 'bKash' | 'Nagad';
 }
 
 export interface MVPSettings {
