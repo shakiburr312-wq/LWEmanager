@@ -1,4 +1,4 @@
-// Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamically
+// Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamicallyy
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers, updatePlayer, addSalaryPayment, issueWarning, setBanStatus } from '../lib/players';
