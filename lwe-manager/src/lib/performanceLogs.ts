@@ -4,7 +4,10 @@ import {
   addDoc, 
   onSnapshot, 
   query, 
-  orderBy 
+  orderBy,
+  doc,
+  updateDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { PerformanceLog } from '../types';
@@ -89,3 +92,47 @@ export async function addPerformanceLogs(newLogs: Omit<PerformanceLog, 'id'>[]) 
   const promises = newLogs.map(log => addDoc(collection(db, COLLECTION_NAME), log));
   await Promise.all(promises);
 }
+
+/**
+ * Update an existing performance log entry
+ */
+export async function updatePerformanceLog(logId: string, updatedFields: Partial<PerformanceLog>) {
+  // Update local storage first
+  const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (local) {
+    const list: PerformanceLog[] = JSON.parse(local);
+    const idx = list.findIndex(log => log.id === logId);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updatedFields };
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+      notifyWatchers(list);
+    }
+  }
+
+  // Update in Firestore (only if not a mock local ID)
+  if (!logId.startsWith('log_local_')) {
+    const docRef = doc(db, COLLECTION_NAME, logId);
+    await updateDoc(docRef, updatedFields);
+  }
+}
+
+/**
+ * Delete a performance log entry
+ */
+export async function deletePerformanceLog(logId: string) {
+  // Update local storage first
+  const local = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (local) {
+    const list: PerformanceLog[] = JSON.parse(local);
+    const updated = list.filter(log => log.id !== logId);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+    notifyWatchers(updated);
+  }
+
+  // Delete in Firestore (only if not a mock local ID)
+  if (!logId.startsWith('log_local_')) {
+    const docRef = doc(db, COLLECTION_NAME, logId);
+    await deleteDoc(docRef);
+  }
+}
+
