@@ -13,12 +13,14 @@ export const SettingsPage: React.FC = () => {
   const [killsWeight, setKillsWeight] = useState(1);
   const [damageWeight, setDamageWeight] = useState(0.1);
   const [saving, setSaving] = useState(false);
+  const [currentSettings, setCurrentSettings] = useState<MVPSettings | null>(null);
 
   useEffect(() => {
     const unsubscribe = watchMVPSettings((data) => {
       setKdWeight(data.kdWeight);
       setKillsWeight(data.killsWeight);
       setDamageWeight(data.damageWeight);
+      setCurrentSettings(data);
     });
     return () => unsubscribe();
   }, []);
@@ -36,7 +38,8 @@ export const SettingsPage: React.FC = () => {
       await saveMVPSettings({
         kdWeight: Number(kdWeight),
         killsWeight: Number(killsWeight),
-        damageWeight: Number(damageWeight)
+        damageWeight: Number(damageWeight),
+        seasonStartDate: currentSettings?.seasonStartDate || '2026-07-01T00:00:00.000Z'
       });
       toast.success('MVP scoring weights successfully updated!', { id: toastId });
     } catch (err: any) {
