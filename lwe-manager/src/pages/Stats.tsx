@@ -1,20 +1,26 @@
+// Replacement of /src/pages/Stats.tsx - Performance hub refactored to support Season-based MVP calculations and dynamic leaderboard
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { watchPlayers } from '../lib/players';
-import { watchMVPSettings } from '../lib/settings';
-import { PlayerProfile, MVPSettings } from '../types';
+import { watchMVPSettings, checkAndResetSeason } from '../lib/settings';
+import { watchPerformanceLogs } from '../lib/performanceLogs';
+import { PlayerProfile, MVPSettings, PerformanceLog } from '../types';
+import { getSeasonRankedPlayers, SeasonRankedPlayer } from '../utils/mvp';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
-import { Trophy, Crown, Star, Medal, Crosshair, Flame, TrendingUp, Sparkles, BarChart3 } from 'lucide-react';
+import { Trophy, Crown, Star, Medal, Crosshair, Flame, TrendingUp, Sparkles, BarChart3, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
 
-interface RankedPlayer extends PlayerProfile {
-  score: number;
-}
-
 export const Stats: React.FC = () => {
+  const { user, isAdmin } = useAuth();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
-  const [mvpSettings, setMvpSettings] = useState<MVPSettings>({ kdWeight: 10, killsWeight: 1, damageWeight: 0.1 });
+  const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
+  const [mvpSettings, setMvpSettings] = useState<MVPSettings>({ 
+    kdWeight: 10, 
+    killsWeight: 1, 
+    damageWeight: 0.1,
+    seasonStartDate: new Date().toISOString()
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,35 +29,40 @@ export const Stats: React.FC = () => {
       setPlayers(data);
     });
 
+    // Listen to performance logs
+    const unsubLogs = watchPerformanceLogs((logs) => {
+      setPerformanceLogs(logs);
+    });
+
     // Listen to MVP formula configurations
     const unsubSettings = watchMVPSettings((settings) => {
       setMvpSettings(settings);
+      
+      // Perform 30-day season auto-reset check
+      if (settings.seasonStartDate) {
+        checkAndResetSeason(settings, !!isAdmin);
+      }
+      
       setLoading(false);
     });
 
     return () => {
       unsubPlayers();
+      unsubLogs();
       unsubSettings();
     };
-  }, []);
+  }, [isAdmin]);
 
-  // Compute ranks & MVP
-  const rankedPlayers: RankedPlayer[] = players
-    .filter(p => p.status === 'active') // only active players can be MVP
-    .map((player) => {
-      const score = (player.kd * mvpSettings.kdWeight) + 
-                    (player.kills * mvpSettings.killsWeight) + 
-                    (player.damage * mvpSettings.damageWeight);
-      return {
-        ...player,
-        score: Number(score.toFixed(1))
-      };
-    })
-    .sort((a, b) => b.score - a.score);
+  // Compute Season-Based Rankings
+  const rankedPlayers: SeasonRankedPlayer[] = getSeasonRankedPlayers(players, performanceLogs, mvpSettings);
 
   const mvp = rankedPlayers.length > 0 ? rankedPlayers[0] : null;
   const runnerUp = rankedPlayers.length > 1 ? rankedPlayers[1] : null;
   const thirdPlace = rankedPlayers.length > 2 ? rankedPlayers[2] : null;
+
+  const formattedSeasonStart = mvpSettings.seasonStartDate 
+    ? new Date(mvpSettings.seasonStartDate).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'N/A';
 
   return (
     <div className="flex min-h-screen bg-[#050507]">
@@ -65,13 +76,17 @@ export const Stats: React.FC = () => {
             <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
               Performance <span className="text-purple-500">Hub</span>
             </h2>
-            <p className="text-gray-400 text-sm mt-1">Live statistical rankings and MVP recognition</p>
+            <p className="text-gray-400 text-sm mt-1">Live season-based rankings and MVP recognition</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
             <BalanceIndicator />
+            <div className="bg-[#11111a] border border-white/5 px-4 py-2.5 rounded-xl font-mono text-[10px] text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-purple-500" />
+              <span>Season Started: {formattedSeasonStart}</span>
+            </div>
             <div className="bg-[#11111a] border border-white/5 px-4 py-2.5 rounded-xl font-mono text-[10px] text-purple-400 uppercase tracking-wider">
-              Formula: (K/D × {mvpSettings.kdWeight}) + (Kills × {mvpSettings.killsWeight}) + (Damage × {mvpSettings.damageWeight})
+              Formula: (Kills × {mvpSettings.killsWeight}) + (Damage × {mvpSettings.damageWeight}) + (K/D × {mvpSettings.kdWeight})
             </div>
           </div>
         </header>
@@ -115,17 +130,23 @@ export const Stats: React.FC = () => {
                   <div className="flex-1 text-center md:text-left">
                     <div className="inline-flex items-center space-x-1.5 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded text-[9px] font-mono text-amber-400 uppercase tracking-wider mb-2">
                       <Sparkles className="w-3 h-3" />
-                      <span>Roster Top Performer</span>
+                      <span>Season Top Performer</span>
                     </div>
                     <h2 className="text-3xl font-display font-black text-white tracking-wider uppercase">{mvp.name}</h2>
                     <span className="text-xs font-mono text-purple-300 uppercase tracking-widest block mt-1">Role: {mvp.role}</span>
                   </div>
 
                   {/* Right calculated score and stats */}
-                  <div className="grid grid-cols-4 gap-6 bg-[#050507]/60 border border-white/5 p-5 rounded-2xl md:min-w-[400px]">
+                  <div className="grid grid-cols-5 gap-4 bg-[#050507]/60 border border-white/5 p-5 rounded-2xl md:min-w-[480px]">
                     <div className="text-center">
+                      <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">Matches</span>
+                      <span className="text-sm font-bold text-white font-mono">{mvp.matches}</span>
+                    </div>
+                    <div className="text-center border-l border-white/5">
                       <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">K/D</span>
-                      <span className="text-sm font-bold text-white font-mono">{mvp.kd.toFixed(2)}</span>
+                      <span className="text-sm font-bold text-white font-mono">
+                        {mvp.matches > 0 ? (mvp.kills / mvp.matches).toFixed(2) : '0.00'}
+                      </span>
                     </div>
                     <div className="text-center border-l border-white/5">
                       <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">Kills</span>
@@ -172,8 +193,14 @@ export const Stats: React.FC = () => {
                     <div className="flex items-end justify-between mt-6 border-t border-white/5 pt-4">
                       <div className="flex space-x-3.5 font-mono text-xs">
                         <div>
+                          <span className="text-gray-500 text-[9px] block">Matches</span>
+                          <span className="text-white font-bold">{player.matches}</span>
+                        </div>
+                        <div>
                           <span className="text-gray-500 text-[9px] block">K/D</span>
-                          <span className="text-white font-bold">{player.kd.toFixed(2)}</span>
+                          <span className="text-white font-bold text-xs">
+                            {player.matches > 0 ? (player.kills / player.matches).toFixed(2) : '0.00'}
+                          </span>
                         </div>
                         <div>
                           <span className="text-gray-500 text-[9px] block">KILLS</span>
@@ -181,7 +208,7 @@ export const Stats: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-gray-500 text-[9px] font-mono block">FINAL SCORE</span>
+                        <span className="text-gray-500 text-[9px] font-mono block">SEASON SCORE</span>
                         <span className={`text-lg font-black font-mono ${colors.text}`}>{player.score}</span>
                       </div>
                     </div>
@@ -194,7 +221,7 @@ export const Stats: React.FC = () => {
             <div className="bg-[#0c0c14] border border-white/5 rounded-3xl p-6 flex flex-col">
               <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 mb-6 flex items-center space-x-2">
                 <BarChart3 className="w-4 h-4 text-purple-400" />
-                <span>COMPLETE ROSTER LEADERBOARD</span>
+                <span>COMPLETE SEASON LEADERBOARD</span>
               </h3>
 
               <div className="overflow-x-auto">
@@ -204,9 +231,11 @@ export const Stats: React.FC = () => {
                       <th className="py-3 px-4 text-center w-12">Rank</th>
                       <th className="py-3 px-4">Player</th>
                       <th className="py-3 px-4">Role</th>
-                      <th className="py-3 px-4 text-center">K/D Ratio</th>
-                      <th className="py-3 px-4 text-center">Total Kills</th>
-                      <th className="py-3 px-4 text-center">Total Damage</th>
+                      <th className="py-3 px-4 text-center">Matches</th>
+                      <th className="py-3 px-4 text-center">Booyahs</th>
+                      <th className="py-3 px-4 text-center">Season K/D</th>
+                      <th className="py-3 px-4 text-center">Season Kills</th>
+                      <th className="py-3 px-4 text-center">Season Damage</th>
                       <th className="py-3 px-4 text-right">Weighted Score</th>
                     </tr>
                   </thead>
@@ -225,7 +254,11 @@ export const Stats: React.FC = () => {
                         </td>
                         <td className="py-4 px-4 font-sans font-bold text-white uppercase">{player.name}</td>
                         <td className="py-4 px-4 text-purple-300">{player.role}</td>
-                        <td className="py-4 px-4 text-center text-white">{player.kd.toFixed(2)}</td>
+                        <td className="py-4 px-4 text-center text-white">{player.matches}</td>
+                        <td className="py-4 px-4 text-center text-amber-500">{player.booyahs}</td>
+                        <td className="py-4 px-4 text-center text-white">
+                          {player.matches > 0 ? (player.kills / player.matches).toFixed(2) : '0.00'}
+                        </td>
                         <td className="py-4 px-4 text-center text-white">{player.kills}</td>
                         <td className="py-4 px-4 text-center text-white">{player.damage}</td>
                         <td className="py-4 px-4 text-right font-black text-purple-400">{player.score}</td>
