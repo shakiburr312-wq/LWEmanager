@@ -1,3 +1,4 @@
+// Replacement of /src/components/Sidebar.tsx - Added navigation item for Daily Stats Entry
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -57,6 +58,12 @@ export const Sidebar: React.FC = () => {
       name: 'Finance & Overview',
       path: '/finance',
       icon: DollarSign,
+      show: isAdmin, // Admin only
+    },
+    {
+      name: 'Daily Stats Entry',
+      path: '/daily-stats',
+      icon: BarChart2,
       show: isAdmin, // Admin only
     },
     {
