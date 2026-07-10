@@ -55,7 +55,7 @@ export const SettingsPage: React.FC = () => {
       <Sidebar />
 
       {/* Main Content Area */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto">
         <header className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
