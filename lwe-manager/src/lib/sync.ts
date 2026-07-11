@@ -30,7 +30,13 @@ export async function performScoreSync(
       const totalBooyahs = playerLogs.reduce((sum, log) => sum + (Number(log.booyahs) || 0), 0);
       const totalKills = playerLogs.reduce((sum, log) => sum + (Number(log.kills) || 0), 0);
       const totalDamage = playerLogs.reduce((sum, log) => sum + (Number(log.damage) || 0), 0);
-      const calculatedKd = totalMatches > 0 ? Number((totalKills / totalMatches).toFixed(2)) : 0;
+      
+      let calculatedKd = 0;
+      if (totalMatches > 0) {
+        const deaths = totalMatches - totalBooyahs;
+        const divisor = Math.max(1, deaths);
+        calculatedKd = Number((totalKills / divisor).toFixed(2));
+      }
 
       // Only update if there is an actual difference to save database write costs
       const hasDiff = 
