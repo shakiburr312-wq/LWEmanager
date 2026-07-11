@@ -255,7 +255,7 @@ export const Players: React.FC = () => {
                         <p className="text-gray-400 text-xs font-mono">Meet the active roster fighting alongside you in the {user.lineup || '1st Lineup'}</p>
                       </div>
 
-                      {!isAdmin && (
+                      {user && (
                         <button
                           onClick={() => setIsRequestModalOpen(true)}
                           className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase rounded-lg shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-all cursor-pointer font-mono"
@@ -666,7 +666,27 @@ export const Players: React.FC = () => {
         <RequestSalaryModal
           isOpen={isRequestModalOpen}
           onClose={() => setIsRequestModalOpen(false)}
-          playerProfile={players.find(p => p.id === user?.uid) || null}
+          playerProfile={
+            players.find(p => p.id === user?.uid) || 
+            players.find(p => p.userId === user?.uid) || 
+            (user ? {
+              id: user.uid,
+              userId: user.uid,
+              name: user.name,
+              role: user.inGameRole || 'Fragger',
+              status: 'active' as const,
+              kd: 0,
+              kills: 0,
+              damage: 0,
+              salary: user.role === 'admin' ? 1000 : 0,
+              warnings: 0,
+              joinedAt: user.createdAt || new Date().toISOString(),
+              wallet: user.wallet || 0,
+              matches: 0,
+              booyahs: 0,
+              lineup: user.lineup || '1st Lineup'
+            } : null)
+          }
         />
       </main>
     </div>
