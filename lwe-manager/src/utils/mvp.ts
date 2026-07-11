@@ -48,8 +48,10 @@ export function getSeasonRankedPlayers(
     const totalMatches = stats.matches;
     const totalBooyahs = stats.booyahs;
 
-    // Formula: (totalKills × killsWeight) + (totalDamage × damageWeight) + ((totalMatches > 0 ? totalKills/totalMatches : 0) × kdWeight)
-    const averageKd = totalMatches > 0 ? (totalKills / totalMatches) : 0;
+    // Formula: (totalKills × killsWeight) + (totalDamage × damageWeight) + ((totalMatches > 0 ? totalKills/divisor : 0) × kdWeight)
+    const deaths = totalMatches - totalBooyahs;
+    const divisor = Math.max(1, deaths);
+    const averageKd = totalMatches > 0 ? (totalKills / divisor) : 0;
     const score = (totalKills * settings.killsWeight) + 
                   (totalDamage * settings.damageWeight) + 
                   (averageKd * settings.kdWeight);
