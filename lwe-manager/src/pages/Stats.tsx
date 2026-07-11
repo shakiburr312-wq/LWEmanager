@@ -1,3 +1,4 @@
+// Modification: Integrated click-to-reveal full screen MvpRevealModal animation spotlight
 // Replacement of /src/pages/Stats.tsx - Performance hub refactored to support Season-based MVP calculations and dynamic leaderboard
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +9,7 @@ import { PlayerProfile, MVPSettings, PerformanceLog } from '../types';
 import { getSeasonRankedPlayers, SeasonRankedPlayer } from '../utils/mvp';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
+import { MvpRevealModal } from '../components/MvpRevealModal';
 import { Trophy, Crown, Star, Medal, Crosshair, Flame, TrendingUp, Sparkles, BarChart3, Calendar } from 'lucide-react';
 import { motion } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -23,6 +25,7 @@ export const Stats: React.FC = () => {
     seasonStartDate: new Date().toISOString()
   });
   const [loading, setLoading] = useState(true);
+  const [isMvpModalOpen, setIsMvpModalOpen] = useState(false);
 
   useEffect(() => {
     // Listen to players
@@ -122,7 +125,10 @@ export const Stats: React.FC = () => {
           <div className="space-y-8">
             {/* MVP Top Showcase Section */}
             {mvp && (
-              <div className="bg-[#0c0c14] border border-purple-500/30 rounded-3xl relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.15)] p-8">
+              <div 
+                onClick={() => setIsMvpModalOpen(true)}
+                className="bg-[#0c0c14] border border-purple-500/30 rounded-3xl relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.15)] p-8 cursor-pointer hover:border-purple-500/50 hover:shadow-[0_0_40px_rgba(147,51,234,0.25)] transition-all group"
+              >
                 {/* Visual particle sparkles design decoration */}
                 <div className="absolute top-0 right-0 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute top-6 right-6 text-amber-400 animate-bounce">
@@ -283,6 +289,14 @@ export const Stats: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {mvp && (
+          <MvpRevealModal 
+            isOpen={isMvpModalOpen}
+            onClose={() => setIsMvpModalOpen(false)}
+            mvp={mvp}
+          />
         )}
       </main>
     </div>
