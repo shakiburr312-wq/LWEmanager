@@ -1,7 +1,9 @@
-// Replacement of /src/components/Sidebar.tsx - Added mobile hamburger navigation and fully responsive mobile layouts
-import React, { useState } from 'react';
+// Replacement of /src/components/Sidebar.tsx - Added mobile hamburger navigation and fully responsive mobile layout
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { watchSiteSettings } from '../lib/settings';
+import { SiteSettings } from '../types';
 import { 
   Users, 
   Trophy, 
@@ -23,6 +25,14 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({});
+
+  useEffect(() => {
+    const unsub = watchSiteSettings((data) => {
+      setSiteSettings(data);
+    });
+    return () => unsub();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -110,9 +120,15 @@ export const Sidebar: React.FC = () => {
       `}>
         {/* Brand Header */}
         <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(147,51,234,0.5)]">
-            <Trophy className="w-5 h-5 text-white" />
-          </div>
+          {siteSettings.logoUrl ? (
+            <div className="w-10 h-10 rounded-lg overflow-hidden border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(147,51,234,0.3)] bg-[#050507]">
+              <img src={siteSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(147,51,234,0.5)]">
+              <Trophy className="w-5 h-5 text-white" />
+            </div>
+          )}
           <div>
             <h1 className="text-xl font-bold tracking-tighter text-white">LWE <span className="text-purple-500">MANAGER</span></h1>
             <span className="text-[9px] font-mono text-purple-400 uppercase tracking-widest block">Command Center</span>
