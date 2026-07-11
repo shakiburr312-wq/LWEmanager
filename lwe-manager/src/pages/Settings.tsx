@@ -1,4 +1,4 @@
-// Modification: Replaced Firebase Storage with Cloudinary uploadImage helper for site branding and lineup logos
+// Moodification: Replaced Firebase Storage with Cloudinary uploadImage helper for site branding and lineup logos
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
