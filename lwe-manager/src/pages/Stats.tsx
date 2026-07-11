@@ -1,4 +1,4 @@
-// Modification: Integrated click-to-reveal full screen MvpRevealModal animation spotlight
+// Moodification: Integrated click-to-reveal full screen MvpRevealModal animation spotlight
 // Replacement of /src/pages/Stats.tsx - Performance hub refactored to support Season-based MVP calculations and dynamic leaderboard
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
