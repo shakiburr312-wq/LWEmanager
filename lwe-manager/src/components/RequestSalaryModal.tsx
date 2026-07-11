@@ -17,8 +17,11 @@ export const RequestSalaryModal: React.FC<RequestSalaryModalProps> = ({ isOpen, 
 
   useEffect(() => {
     if (playerProfile) {
-      // Suggest the base salary rate as default requested amount
-      setAmount((playerProfile.salary || 0).toString());
+      const baseSalary = playerProfile.salary || 0;
+      const warningDeductionActive = (playerProfile.warnings || 0) >= 3;
+      const finalSalary = warningDeductionActive ? baseSalary * 0.9 : baseSalary;
+      // Lock requested amount to final pre-configured salary
+      setAmount(finalSalary.toString());
       setReason(`Monthly Salary Stipend for ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`);
     }
   }, [playerProfile, isOpen]);
@@ -72,6 +75,12 @@ export const RequestSalaryModal: React.FC<RequestSalaryModalProps> = ({ isOpen, 
             Active Base Rate: <span className="text-white font-bold">${playerProfile.salary}</span>
             <br />
             Warnings Penalty: <span className={playerProfile.warnings >= 3 ? 'text-red-400 font-bold' : 'text-gray-400'}>{playerProfile.warnings} / 3 {playerProfile.warnings >= 3 ? '(-10% Active)' : ''}</span>
+            {playerProfile.warnings >= 3 && (
+              <>
+                <br />
+                Net Salary Rate (10% off): <span className="text-emerald-400 font-bold">${playerProfile.salary * 0.9}</span>
+              </>
+            )}
           </p>
         </div>
 
@@ -85,12 +94,16 @@ export const RequestSalaryModal: React.FC<RequestSalaryModalProps> = ({ isOpen, 
               <input
                 type="number"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                readOnly
+                disabled
                 placeholder="Amount in USD"
-                className="w-full bg-[#050507] border border-white/10 focus:border-purple-500 rounded-xl py-2 px-10 text-sm text-white focus:outline-none"
+                className="w-full bg-[#050507]/60 border border-white/5 rounded-xl py-2 px-10 text-sm text-gray-400 focus:outline-none cursor-not-allowed"
                 required
               />
             </div>
+            <p className="text-[10px] text-purple-400/70 leading-relaxed italic">
+              * This amount is pre-configured by the administrator and cannot be modified.
+            </p>
           </div>
 
           <div className="space-y-1.5">
