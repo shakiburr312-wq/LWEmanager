@@ -1,4 +1,4 @@
-// Modification: Use Cloudinary upload helper instead of Firebase Storage
+// Moodification: Use Cloudinary upload helper instead of Firebase Storage
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
