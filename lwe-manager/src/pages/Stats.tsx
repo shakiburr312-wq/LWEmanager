@@ -159,7 +159,7 @@ export const Stats: React.FC = () => {
                     <div className="text-center border-l border-white/5">
                       <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">K/D</span>
                       <span className="text-sm font-bold text-white font-mono">
-                        {mvp.matches > 0 ? (mvp.kills / mvp.matches).toFixed(2) : '0.00'}
+                        {mvp.matches > 0 ? (mvp.kills / Math.max(1, mvp.matches - mvp.booyahs)).toFixed(2) : '0.00'}
                       </span>
                     </div>
                     <div className="text-center border-l border-white/5">
@@ -213,7 +213,7 @@ export const Stats: React.FC = () => {
                         <div>
                           <span className="text-gray-500 text-[9px] block">K/D</span>
                           <span className="text-white font-bold text-xs">
-                            {player.matches > 0 ? (player.kills / player.matches).toFixed(2) : '0.00'}
+                            {player.matches > 0 ? (player.kills / Math.max(1, player.matches - player.booyahs)).toFixed(2) : '0.00'}
                           </span>
                         </div>
                         <div>
@@ -271,7 +271,7 @@ export const Stats: React.FC = () => {
                         <td className="py-4 px-4 text-center text-white">{player.matches}</td>
                         <td className="py-4 px-4 text-center text-amber-500">{player.booyahs}</td>
                         <td className="py-4 px-4 text-center text-white">
-                          {player.matches > 0 ? (player.kills / player.matches).toFixed(2) : '0.00'}
+                          {player.matches > 0 ? (player.kills / Math.max(1, player.matches - player.booyahs)).toFixed(2) : '0.00'}
                         </td>
                         <td className="py-4 px-4 text-center text-white">{player.kills}</td>
                         <td className="py-4 px-4 text-center text-white">{player.damage}</td>
