@@ -1,3 +1,4 @@
+// Modification: Connected Player Profile Edit modal props and MvpRevealModal click animation spotlight
 // Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamically
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -5,13 +6,16 @@ import { watchPlayers, updatePlayer, addSalaryPayment, issueWarning, setBanStatu
 import { watchInvestmentCampaigns } from '../lib/investments';
 import { watchSalaryRequests } from '../lib/salaryRequests';
 import { watchPerformanceLogs } from '../lib/performanceLogs';
-import { watchMVPSettings, checkAndResetSeason } from '../lib/settings';
-import { PlayerProfile, InvestmentCampaign, SalaryRequest, PerformanceLog, MVPSettings } from '../types';
+import { watchMVPSettings, checkAndResetSeason, watchLineups } from '../lib/settings';
+import { PlayerProfile, InvestmentCampaign, SalaryRequest, PerformanceLog, MVPSettings, Lineup } from '../types';
 import { getSeasonRankedPlayers } from '../utils/mvp';
 import { PlayerModal } from '../components/PlayerModal';
 import { SalaryModal } from '../components/SalaryModal';
 import { SetSalaryRateModal } from '../components/SetSalaryRateModal';
 import { RequestSalaryModal } from '../components/RequestSalaryModal';
+import { EditProfileModal } from '../components/EditProfileModal';
+import { MvpRevealModal } from '../components/MvpRevealModal';
+import { HeroBanner } from '../components/HeroBanner';
 import { Sidebar } from '../components/Sidebar';
 import { BalanceIndicator } from '../components/BalanceIndicator';
 import { 
@@ -52,6 +56,11 @@ export const Players: React.FC = () => {
 
   const [salaryRequests, setSalaryRequests] = useState<SalaryRequest[]>([]);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  
+  // Custom Profile & MVP spotlight modals
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isMvpModalOpen, setIsMvpModalOpen] = useState(false);
+  const [lineups, setLineups] = useState<Lineup[]>([]);
 
   // Performance Logs and MVP states
   const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
@@ -92,12 +101,17 @@ export const Players: React.FC = () => {
       }
     });
 
+    const unsubLineups = watchLineups((data) => {
+      setLineups(data);
+    });
+
     return () => {
       unsubPlayers();
       unsubCampaigns();
       unsubRequests();
       unsubLogs();
       unsubSettings();
+      unsubLineups();
     };
   }, [isAdmin]);
 
@@ -227,8 +241,24 @@ export const Players: React.FC = () => {
               <option value="Support">Support</option>
               <option value="Assaulter">Assaulter</option>
             </select>
+
+            {/* Edit Profile Button */}
+            {user && (
+              <button
+                onClick={() => setIsProfileModalOpen(true)}
+                className="bg-purple-600/20 hover:bg-purple-600 border border-purple-500/30 text-purple-300 hover:text-white rounded-xl py-2 px-3 text-xs font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer font-mono shadow-md"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Profile</span>
+              </button>
+            )}
           </div>
         </header>
+
+        {/* Dynamic Branded Hero Banner */}
+        <div className="mb-8">
+          <HeroBanner />
+        </div>
 
         {loading ? (
           <div className="h-64 flex items-center justify-center">
@@ -294,14 +324,30 @@ export const Players: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {teamMembers.map(member => (
                             <div key={member.id} className="bg-[#050507]/60 border border-white/5 hover:border-purple-500/20 rounded-2xl p-4 flex items-center space-x-3 transition-all">
-                              <div className="w-10 h-10 rounded-full bg-purple-950/20 border border-purple-500/10 flex items-center justify-center font-bold text-purple-400 font-mono text-sm uppercase">
-                                {member.name.substring(0, 2)}
+                              <div className="relative flex-shrink-0">
+                                <div className="w-10 h-10 rounded-full border border-purple-500/10 bg-purple-950/20 overflow-hidden flex items-center justify-center font-bold text-purple-400 font-mono text-sm uppercase">
+                                  {member.photoUrl ? (
+                                    <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    member.name.substring(0, 2)
+                                  )}
+                                </div>
+                                {/* lineup badge */}
+                                {(() => {
+                                  const mLineup = lineups.find(l => l.id === member.lineupId || l.name === member.lineup);
+                                  if (!mLineup?.logoUrl) return null;
+                                  return (
+                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#050507] border border-purple-500/30 rounded-full overflow-hidden flex items-center justify-center p-0.5">
+                                      <img src={mLineup.logoUrl} alt="lineup logo" className="w-full h-full object-contain" />
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <h4 className="text-xs font-bold text-white truncate uppercase tracking-wider">{member.name}</h4>
                                 <span className="text-[9px] text-gray-500 block uppercase font-mono">{member.role}</span>
                                 <div className="flex items-center space-x-2 mt-1 text-[9px] font-mono text-purple-400">
-                                  <span>KD: <strong>{member.kd.toFixed(2)}</strong></span>
+                                  <span>KD: <strong>{((member.matches && member.matches > 0) ? ((member.kills || 0) / Math.max(1, member.matches - (member.booyahs || 0))) : (member.kd || 0)).toFixed(2)}</strong></span>
                                   <span className="text-gray-700">|</span>
                                   <span>Kills: <strong>{member.kills}</strong></span>
                                 </div>
@@ -317,24 +363,37 @@ export const Players: React.FC = () => {
                 {/* Sidebar Highlight Columns (Season MVP + Campaigns) */}
                 <div className="flex flex-col gap-6">
                   {/* Season MVP Card */}
-                  <div className="bg-[#0c0c14] border border-amber-500/25 rounded-3xl p-6 relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.05)]">
+                  <div 
+                    onClick={() => {
+                      if (seasonMvp) {
+                        setIsMvpModalOpen(true);
+                      }
+                    }}
+                    className="bg-[#0c0c14] border border-amber-500/25 rounded-3xl p-6 relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.05)] cursor-pointer hover:border-amber-500/50 hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] transition-all group"
+                  >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-display font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
-                          <Crown className="w-5 h-5 text-amber-400 animate-pulse" />
+                          <Crown className="w-5 h-5 text-amber-400 animate-pulse animate-bounce" />
                           <span>SEASON MVP</span>
                         </h3>
-                        <span className="text-[9px] font-mono text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded">
-                          TOP PLAYER
+                        <span className="text-[9px] font-mono text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded group-hover:bg-amber-500/25 transition-all">
+                          REVEAL SPOTLIGHT
                         </span>
                       </div>
 
                       {seasonMvp ? (
                         <div>
                           <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold font-mono text-base">
-                              #1
+                            <div className="relative flex-shrink-0">
+                              <div className="w-12 h-12 rounded-xl border border-amber-500/30 bg-[#050507] overflow-hidden flex items-center justify-center font-bold font-mono text-amber-400 text-base">
+                                {seasonMvp.photoUrl ? (
+                                  <img src={seasonMvp.photoUrl} alt={seasonMvp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  "#1"
+                                )}
+                              </div>
                             </div>
                             <div>
                               <h4 className="text-base font-bold text-white uppercase tracking-wide truncate max-w-[140px]">{seasonMvp.name}</h4>
@@ -454,12 +513,33 @@ export const Players: React.FC = () => {
 
                       {/* Header info */}
                       <div className="p-6 border-b border-white/5 flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className={`w-2 h-2 rounded-full ${isBanned ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
-                            <h3 className="text-lg font-display font-bold text-white tracking-wide truncate max-w-[150px] uppercase">{player.name}</h3>
+                        <div className="flex items-center space-x-3">
+                          <div className="relative flex-shrink-0">
+                            <div className="w-12 h-12 rounded-full border border-purple-500/20 bg-[#050507] overflow-hidden flex items-center justify-center font-bold font-mono text-purple-400 uppercase text-sm">
+                              {player.photoUrl ? (
+                                <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
+                              ) : (
+                                player.name.substring(0, 2)
+                              )}
+                            </div>
+                            {/* lineup logo badge */}
+                            {(() => {
+                              const pLineup = lineups.find(l => l.id === player.lineupId || l.name === player.lineup);
+                              if (!pLineup?.logoUrl) return null;
+                              return (
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#050507] border border-purple-500/30 rounded-full overflow-hidden flex items-center justify-center p-0.5 shadow-md">
+                                  <img src={pLineup.logoUrl} alt="lineup logo badge" className="w-full h-full object-contain" />
+                                </div>
+                              );
+                            })()}
                           </div>
-                          <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mt-0.5">{player.role}</span>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`w-2 h-2 rounded-full ${isBanned ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                              <h3 className="text-lg font-display font-bold text-white tracking-wide truncate max-w-[150px] uppercase">{player.name}</h3>
+                            </div>
+                            <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mt-0.5">{player.role}</span>
+                          </div>
                         </div>
 
                         {/* Status Badge */}
@@ -479,7 +559,9 @@ export const Players: React.FC = () => {
                             <span className="text-[9px] font-mono text-gray-500 uppercase block mb-1">K/D</span>
                             <div className="flex items-center justify-center space-x-1">
                               <Crosshair className="w-3.5 h-3.5 text-purple-400" />
-                              <span className="text-xs font-bold text-white font-mono">{player.kd.toFixed(2)}</span>
+                              <span className="text-xs font-bold text-white font-mono">
+                                {((player.matches && player.matches > 0) ? ((player.kills || 0) / Math.max(1, player.matches - (player.booyahs || 0))) : (player.kd || 0)).toFixed(2)}
+                              </span>
                             </div>
                           </div>
                           <div className="text-center border-x border-white/5">
@@ -500,7 +582,10 @@ export const Players: React.FC = () => {
                         <div className="flex justify-between items-center px-2 text-[10px] font-mono text-gray-500">
                           <span>Matches: <strong className="text-white">{player.matches || 0}</strong></span>
                           <span>Booyahs: <strong className="text-emerald-400">{player.booyahs || 0}</strong></span>
-                          <span>Lineup: <strong className="text-purple-400 uppercase">{player.lineup || '1st Lineup'}</strong></span>
+                          <span>Lineup: <strong className="text-purple-400 uppercase">{(() => {
+                            const pLineup = lineups.find(l => l.id === player.lineupId || l.name === player.lineup);
+                            return pLineup?.name || player.lineup || '1st Lineup';
+                          })()}</strong></span>
                         </div>
                       </div>
 
@@ -687,6 +772,20 @@ export const Players: React.FC = () => {
               lineup: user.lineup || '1st Lineup'
             } : null)
           }
+        />
+
+        {/* Player Profile Self-Editor Modal */}
+        <EditProfileModal 
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          playerProfile={players.find(p => p.userId === user?.uid)}
+        />
+
+        {/* Dynamic Season MVP Revealer Animation Spotlight */}
+        <MvpRevealModal 
+          isOpen={isMvpModalOpen}
+          onClose={() => setIsMvpModalOpen(false)}
+          mvp={seasonMvp}
         />
       </main>
     </div>
