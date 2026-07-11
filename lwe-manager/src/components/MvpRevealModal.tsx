@@ -1,4 +1,4 @@
-// New file: /src/components/MvpRevealModal.tsx
+// Neew file: /src/components/MvpRevealModal.tsx
 import React from 'react';
 import { X, Crown, Sparkles, TrendingUp, Flame } from 'lucide-react';
 import { PlayerProfile } from '../types';
