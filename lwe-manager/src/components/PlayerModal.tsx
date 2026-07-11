@@ -55,7 +55,8 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({ isOpen, onClose, onSav
   
   let calculatedKd = 0;
   if (matchesNum > 0) {
-    const divisor = booyahsNum > 0 ? Math.max(1, matchesNum - booyahsNum) : matchesNum;
+    const deaths = matchesNum - booyahsNum;
+    const divisor = Math.max(1, deaths);
     calculatedKd = killsNum / divisor;
   }
   const displayKd = calculatedKd.toFixed(2);
@@ -105,7 +106,8 @@ export const PlayerModal: React.FC<PlayerModalProps> = ({ isOpen, onClose, onSav
 
     let computedKd = 0;
     if (matchesVal > 0) {
-      const divisorVal = booyahsVal > 0 ? Math.max(1, matchesVal - booyahsVal) : matchesVal;
+      const deaths = matchesVal - booyahsVal;
+      const divisorVal = Math.max(1, deaths);
       computedKd = killsVal / divisorVal;
     }
 
