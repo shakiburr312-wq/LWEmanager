@@ -1,4 +1,4 @@
-// Moodification: Connected Player Profile Edit modal props and MvpRevealModal click animation spotlight
+// Modification: Connected Player Profile Edit modal props and MvpRevealModal click animation spotlight
 // Replacement of /src/pages/Players.tsx - Roster dashboard updated to calculate and showcase Season MVP dynamically
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
